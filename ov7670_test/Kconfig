@@ -1,0 +1,38 @@
+#
+# For a description of the syntax of this configuration file,
+# see kconfig-language at https://www.kernel.org/doc/Documentation/kbuild/kconfig-language.txt
+#
+
+menuconfig EXAMPLES_OV7670_TEST
+	bool "OV7670 camera driver test"
+    select ANALOG
+	select ADC
+	select GPIO
+    select PWM
+    select I2C
+    select IOTBUS
+	default y
+	
+	---help---
+		Enable camera driver for ov7670
+
+if EXAMPLES_OV7670_TEST
+
+    config OV7670_SCCB
+        int "OV7670 OV SCCB instead of standard I2C interface"
+        default 1
+        ---help---
+            OV7670 OV SCCB instead of standard I2C interface
+    
+    config OV7670_DEVPATH
+        string "camera ov7670 device path"
+        default "/dev/ov7670"
+        ---help---
+            The default path to the ov7670 campera device. Default: /dev/ov7670
+
+endif #EXAMPLES_OV7670_TEST
+
+config USER_ENTRYPOINT
+	string
+	default "ov7670_test_main" if ENTRY_OV7670_TEST
+
