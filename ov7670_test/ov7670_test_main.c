@@ -508,38 +508,15 @@ static void ov7670_tash_modify_reg(const char *addr_str, const char *val_str){
 static uint8_t *yuv_buff = NULL;
 static uint8_t *temp_start = NULL;
 static uint8_t *temp_end = NULL;
-static uint8_t yuv_arr[H_RES*(V_RES + 5)];
-static uint8_t yuv_arr_padded[H_RES*(V_RES + 5)];
-static uint8_t y_buff[18750];
-static uint8_t *y_end = NULL;
-static uint8_t *y_start = NULL;
-static uint8_t *y_arr = NULL;
-static uint32_t line_arr[121] = {0}; //earlier uint16_t
+static uint8_t yuv_arr[H_RES*(V_RES + 2)]; // Capture buffer
+static uint8_t yuv_arr_padded[H_RES*(V_RES + 2)]; //MQTT Buffer
+static uint32_t line_arr[LINES + 2] = {0}; // Line BYTE count buffer
 static uint16_t line_counter = 0;
-static uint32_t y_buff_size = 0;
 static uint32_t line_shift;
 static uint32_t duplicate_lines;
 //static uint32_t row_offset_buffer[121];
 
 //////////////////////////////////// Functions ///////////////////////////////////////
-
-static void print_y_lines(uint32_t l1, uint32_t l2){
-    
-    uint32_t i;
-    uint32_t j;
-    uint32_t k;
-
-    printf("\n\nY DATA");
-    for(i=l1;i<=l2;i++){
-        printf("\n\nLine: %d",i+1);
-        for(j=0;j<10;j++){
-            printf("\n");
-            for(k=16*j;k<16*j+16;k++){
-                printf("%x ",*(y_arr + 160*i + k));
-            }
-        }
-    }
-}
 
 static void print_lines(const char *str1, const char *str2){
     
@@ -552,36 +529,15 @@ static void print_lines(const char *str1, const char *str2){
 	printf("\n\nYUV pixels for lines %d - %d",l1+1,l2);
 	for(i=l1;i<l2;i++){
 		printf("\n\nLine: %d\n",i+1);
-		for(j=0;j<16;j++){
+		for(j=0;j<(BYTES_PER_LINE/20);j++){
 			printf("\nIndex:  %d\t",j);
 			for(k=20*j;k<20*j+20;k++){
-				printf("%x ",yuv_arr_padded[i*320 + k]);
+				printf("%x ",yuv_arr_padded[i*BYTES_PER_LINE + k]);
 			}
 		}
 	}
 	printf("\n\nDone\n");
 }
-
-static uint32_t filter_y_data(void){
-    
-    y_arr = y_buff;
-    y_start = y_arr;
-    y_end = y_arr;
-
-    uint32_t i;
-    
-    for(i=0;i<((line_counter)*160);i++){
-        *(y_arr + i) = (yuv_arr_padded[2*i]);
-        y_end++;
-    }
-
-    uint32_t buff_size = (uint32_t)(y_end - y_start);
-    printf("\ny buff size: %d\n",buff_size);
-    return buff_size;
-
-}
-
-
 
 static void pixel_per_line(void){
     printf("\nTotal lines: %d",line_counter+1);
@@ -591,12 +547,12 @@ static uint32_t shift_line_counter(void){
 	uint32_t k,i,m;
 	m = 0;
 	    for(i=0;i<line_counter;i++){
-		if(((line_arr[i]%640) == 0) && (line_arr[i] != 0)){
+		if(((line_arr[i]%(BYTES_PER_LINE*2)) == 0) && (line_arr[i] != 0)){
 		    for(k=line_counter;k>i;k--){
 		        line_arr[k+1] = line_arr[k];
 		    }
-		    line_arr[i] = 320;
-		    line_arr[i+1] = 320;
+		    line_arr[i] = BYTES_PER_LINE;
+		    line_arr[i+1] = BYTES_PER_LINE;
 		    m++;
 		}
 	    }
@@ -609,235 +565,39 @@ static void pad_yuv_buffer(void){
 	uint32_t i,k,line_sum;
 	line_sum = 0;
 	duplicate_lines = 0;
-	if((line_arr[0] == PIXELS_PER_LINE) && line_counter == 120){
+	printf("\nline counter before padding - %d",line_counter);
+	if((line_arr[0] == BYTES_PER_LINE) && line_counter == LINES){
 	    for(i=0;i<line_counter;i++){
-		if(line_arr[i] != PIXELS_PER_LINE){
+		if(line_arr[i] != BYTES_PER_LINE){
+#ifdef PRINT
 		   printf("\nD - %d\tp - %d",i,line_arr[i]);
-			
+#endif		
 		   duplicate_lines++;
 		    //printf("\nline - %d",i);
-		    for(k=0;k<PIXELS_PER_LINE;k++){
-		        yuv_arr_padded[PIXELS_PER_LINE*i + k] = yuv_arr_padded[PIXELS_PER_LINE*(i-1) + k];
-		       // printf("%d\t",yuv_arr_padded[PIXELS_PER_LINE*i + k]);
+		    for(k=0;k<BYTES_PER_LINE;k++){
+		        yuv_arr_padded[BYTES_PER_LINE*i + k] = yuv_arr_padded[BYTES_PER_LINE*(i-1) + k];
+		       // printf("%d\t",yuv_arr_padded[BYTES_PER_LINE*i + k]);
 		    }
 		    line_sum += line_arr[i];
 		}
 		else{
-		    for(k=0;k<PIXELS_PER_LINE;k++){
-		       yuv_arr_padded[PIXELS_PER_LINE*i + k] =  yuv_arr[line_sum + k];
+		    for(k=0;k<BYTES_PER_LINE;k++){
+		       yuv_arr_padded[BYTES_PER_LINE*i + k] =  yuv_arr[line_sum + k];
 		    }
 		    line_sum += line_arr[i];
 		}
 	    }
 	}
 	else{
+#ifdef PRINT
 	    printf("\n\n DISCARD FRAME");
-	}
-}
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-static void fill_row_offset_buff(uint32_t *row_offset_buff, uint32_t *row_len_buff, uint32_t line_count){
-	uint32_t i,line_sum;
-	line_sum = 0;
-	for(i=0;i<line_count;i++){
-		*(row_offset_buff + i) = line_sum;
-		printf("\nrow - %d\tlength - %d\toffset - %d",i+1,*(row_len_buff + i), *(row_offset_buff + i));
-		line_sum += *(row_len_buff + i);
-	}
-}
-
-
-/*
-* Copies frame from yuv buf to mqtt buf, and prints out any duplicate or split-row operations.
-* ret_val: 0 = success, -1 = fail, 1 = duplicate, 2 = split, 3 = both split and duplicate
-*/
-
-
-
-
-
-
-
-#if 0
-int ov7670_padded_frame(uint32_t *row_addr_index, uint32_t *row_len_index,uint32_t line_count, uint8_t *yuv_buffer, uint8_t *mqtt_buff, uint32_t width){
-	
-	/////////////////////////////////// Line Split Condition /////////////////////////////////////
-	
-	uint32_t k,i,m,p,l;
-	int ret_val;
-	m = 0;
-	ret_val = 0;
-	l = 0;
-	for(i=0;i<line_count;i++){
-		if(((*(row_len_index + i)%(width*2)) == 0) && (*(row_len_index + i) != 0)){
-			p = *(row_addr_index + i);
-			
-		    for(k=line_count;k>i;k--){
-				*(row_len_index + k + 1) = *(row_len_index + k);
-				*(row_addr_index + k + 1) = *(row_addr_index + k);
-		    }
-		    *(row_len_index + i) = width;
-			*(row_addr_index + i) = p;
-			printf("\nLine %d splitted in lines %d and %d\n",i+1,i+1,i+2);
-			printf("\nrow - %d\tlength - %d\toffset - %d",i+1,*(row_len_index + i), *(row_addr_index + i));
-		    *(row_len_index + i + 1) = width;
-			*(row_addr_index + i + 1) = p + width;
-			printf("\nrow - %d\tlength - %d\toffset - %d",i+2,*(row_len_index + i + 1), *(row_addr_index + i + 1));
-		    m++;
-			ret_val = 2;
-		}
-	}
-	
-	printf("\nline_count before shift: %d",line_count);
-	line_count += m;
-	printf("\nline count after sfift : %d",line_count);
-	printf("\nTotal Lines Splitted - %d\n\n\n",m);
-
-	for(i=0;i<line_count;i++){
-			printf("\nrow - %d\tlength - %d\toffset - %d",i+1,*(row_len_index + i), *(row_addr_index + i));
-	}
-	
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	
-	uint32_t line_sum;
-	line_sum = 0;
-	if((*(row_len_index) == width) && (line_count == 120)){
-	    for(i=0;i<line_count;i++){
-			
-			////////////////////// Duplicate Operation //////////////////////////////////////
-			
-			if(*(row_len_index + i) != width){
-			   printf("\nD - %d\tp - %d",i+1,*(row_len_index + i));
-				for(k=0;k<width;k++){
-					*(mqtt_buff + width*i + k) = *(mqtt_buff + width*(i-1) + k);
-				}
-				line_sum += *(row_len_index + i);
-			}
-			
-			/////////////////////////////////////////////////////////////////////////////////
-			
-			else{
-				for(k=0;k<width;k++){
-					m = *(row_addr_index + i);
-				   *(mqtt_buff + width*i + k) =  *(yuv_buffer + m + k);
-				}
-				line_sum += *(row_len_index + i);
-			}
-	    }
-		printf("\nPixels captured - %d",line_sum);
-		
-		if(ret_val == 2){
-			if(line_sum == width*120){
-				ret_val = 0;
-				}
-			else{
-				ret_val = 3;
-				printf("\nPixels lost - %d",((width*120) - line_sum));
-				}
-		}
-		else{
-			if(line_sum == width*120){
-				ret_val = 0;}
-			else{
-				ret_val = 1;
-				printf("\nPixels lost - %d",((width*120) - line_sum));}
-		}
-		
-	}
-	else{
-	    printf("\nDISCARD FRAME");
-		ret_val = -1;
-	}
-	
-	////////////////////////////////////////////////////////////////////////////////////////////////
-	
-	return ret_val;
-}
 #endif
-
-int ov7670_padded_frame(uint32_t *row_addr_index, uint32_t *row_len_index, uint32_t line_count,uint8_t *yuv_buffer, uint8_t *mqtt_buffer, uint32_t width){
-
-	/////////////////////////////////// Line Split Condition /////////////////////////////////////
-	uint32_t k,i,l,s;
-	int ret_val;
-	ret_val = 0;
-	l = 0;
-	s = line_count;
-	for(i=0;i<s;i++){
-		if(((*(row_len_index + i)%(width*2)) == 0) && (*(row_len_index + i) != 0)){
-		    printf("\nline %d split in %d and %d",*(row_len_index + i),	*(row_len_index + i + 1));	    
-		    for(k=s;k>i;k--){
-				*(row_len_index + k + 1) = *(row_len_index + k);
-		    }
-		    *(row_len_index + i) = width;
-		    *(row_len_index + i + 1) = width;
-			ret_val = 2;
-			s++;
-		}
 	}
-	uint32_t y;
-	y = s - line_count;
-	printf("\nline_count before shift: %d",line_count);
-	line_count = s;
-	printf("\nline count after sfift : %d",line_count);
-	printf("\nTotal Lines Splitted : %d\n\n\n",y);
-	fill_row_offset_buff(row_addr_index,row_len_index,line_count);
-
-	uint32_t line_sum,m;
-	line_sum = 0;
-	if((*(row_len_index) == width) && (line_count == 120)){
-	    for(i=0;i<line_count;i++){
-			////////////////////// Duplicate Operation //////////////////////////////////////
-
-			if(*(row_len_index + i) != width){
-			   printf("\nD - %d\tp - %d",i,*(row_len_index + i));
-				for(k=0;k<width;k++){
-					*(mqtt_buffer + width*i + k) = *(mqtt_buffer + width*(i-1) + k);
-				}
-				line_sum += *(row_len_index + i);
-            }
-			else{
-				for(k=0;k<width;k++){
-				   m = *(row_addr_index + i);
-				   *(mqtt_buffer + width*i + k) =  *(yuv_buffer + m + k);
-				}
-				line_sum += *(row_len_index + i);
-			}
-	    }
-		printf("\nPixels captured - %d",line_sum);
-		if(ret_val == 2){
-			if(line_sum == width*120){
-				ret_val = 0;
-				}
-			else{
-				ret_val = 3;
-				printf("\nPixels lost - %d",((width*120) - line_sum));
-				}
-		}
-		else{
-			if(line_sum == width*120){
-				ret_val = 0;}
-			else{
-				ret_val = 1;
-				printf("\nPixels lost - %d",((width*120) - line_sum));}
-		}
-	}
-	else{
-	    printf("\nDISCARD FRAME");
-		ret_val = -1;
-	}
-	
-	return ret_val;
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static void ov7670_state_machine(void){
 
@@ -908,7 +668,6 @@ static void ov7670_state_machine(void){
 				line_arr[line_counter] = pixel;
 				pixel =0;
 				line_counter++;
-				//pixels_per_line = 0;
 			}		
 		break;
 
@@ -927,13 +686,14 @@ static void ov7670_state_machine(void){
 		case 6:
 			temp_end = yuv_buff;
 			end_check = 1;
-			//fill_row_offset_buff(row_offset_buffer, line_arr, line_counter);
-			//ov7670_padded_frame(row_offset_buffer, line_arr, line_counter, yuv_buff, yuv_arr_padded, PIXELS_PER_LINE);
-			///*
 			line_shift = shift_line_counter();
-			printf("%d\n",line_counter);
+#ifdef PRINT
+			printf("line counter before shift : %d\n",line_counter);
+#endif
 			line_counter += line_shift;
-			printf("%d\n",line_counter);
+#ifdef PRINT
+			printf("line counter after shift : %d\n",line_counter);
+#endif
 			pad_yuv_buffer();//*/
 			
 			
@@ -962,25 +722,38 @@ int ov7670_test_main(int argc, char *argv[])
 			if (strcmp(argv[1], "in") == 0){
 
 				init_ov7670_communication();
-				printf("\nConfiguring for QQVGA resolution\n\n");
+#ifdef PRINT
+				printf("\nConfiguring for QVGA resolution\n\n");
+#endif
 				ov7670_setRegisters(ov7670_reset,(sizeof(ov7670_reset)/sizeof(t_codec_init_script_entry)));
+#ifdef PRINT
 				printf("\nCamera registers being reset\n\n");
-				ov7670_setRegisters(ov7670_QQVGA_320,(sizeof(ov7670_QQVGA_320)/sizeof(t_codec_init_script_entry)));
-				printf("\n..... QQVGA_320 (160 x 120) resolution configured .....\n\n");
+#endif
+				ov7670_setRegisters(ov7670_QVGA_640_240,(sizeof(ov7670_QVGA_640_240)/sizeof(t_codec_init_script_entry)));
+#ifdef PRINT
+				printf("\n..... QVGA_640_240 (320 x 640) resolution configured .....\n\n");
+#endif
 				ov7670_setRegisters(ov7670_color,(sizeof(ov7670_color)/sizeof(t_codec_init_script_entry)));
+#ifdef PRINT
 				printf("\n..... Color registers configured .....\n\n");
+#endif
 				ov7670_setRegisters(ov7670_pclk_rate,(sizeof(ov7670_pclk_rate)/sizeof(t_codec_init_script_entry)));
+#ifdef PRINT
 				printf("\n..... Pixel Clock Rate configured .....\n\n");
+
 				printf("\n\n\nov7670 initialized\n\n");
-				
+#endif	
+				ov7670_tash_modify_reg("0x9f","0xcf");
+				ov7670_tash_modify_reg("0xa0","0xaf");	
+					
 			}
-			else if (strcmp(argv[1], "init") == 0){
+			/*else if (strcmp(argv[1], "init") == 0){
 
 				init_ov7670_communication();
 				printf("\nConfiguring for QQVGA resolution\n\n");
 				ov7670_setRegisters(ov7670_QQVGA_TEST_2,(sizeof(ov7670_QQVGA_TEST_2)/sizeof(t_codec_init_script_entry)));
 				printf("\n\n\nov7670 initialized\n\n");
-			}
+			}*/
 			else if (strcmp(argv[1], "st") == 0){
 
 				printf("\nImage Capture\n\n\n");
@@ -991,11 +764,11 @@ int ov7670_test_main(int argc, char *argv[])
 				while(b_s != 3){
 					ov7670_state_machine();
 					if(line_shift < 3){
-						if(line_counter == 120){
-							if(line_arr[0] == PIXELS_PER_LINE){
-								if(duplicate_lines < 3){
+						if(line_counter == LINES){
+							if(line_arr[0] == BYTES_PER_LINE){
+								//if(duplicate_lines < 3){
 									b_s = 3;
-								}
+								//}
 							}
 						}
 					}
@@ -1025,15 +798,29 @@ int ov7670_test_main(int argc, char *argv[])
 				printf("\n\nYUV Buffer Start Location: %d",temp_start);
 				printf("\nYUV Buffer End Location:   %d",temp_end);
 				printf("\nYUV Buffer Size:           %d\n",(temp_end-temp_start));
-			}
-			else if (strcmp(argv[1], "ys") == 0){
-				printf("\n\nY Buffer Start Location: %d",y_start);
-				printf("\nY Buffer End Location:   %d",y_end);
-				printf("\nY Buffer Size:           %d\n",(y_end - y_start));
-			}
-			else if (strcmp(argv[1], "fy") == 0){
-				y_buff_size = filter_y_data();
-				printf("\nfiltered");
+			}		
+			else if (strcmp(argv[1], "cap") == 0){
+				line_counter = 0;
+				line_arr[0] = 0;
+				uint32_t b_s;
+				b_s = 0;
+				while(b_s != 3){
+					ov7670_state_machine();
+					if(line_shift < 3){
+						if(line_counter == LINES){
+							if(line_arr[0] == BYTES_PER_LINE){
+								//if(duplicate_lines < 3){
+									b_s = 3;
+								//}
+							}
+						}
+					}
+					else{b_s = 0;}
+					
+				}
+				uint32_t mqtt_buff_size;
+				mqtt_buff_size = (uint32_t)(temp_end - temp_start);
+				mqtt_pub(yuv_arr_padded,mqtt_buff_size);
 			}
 			else{printf("ERROR: Invalid auto command\n");}
 		
@@ -1041,11 +828,49 @@ int ov7670_test_main(int argc, char *argv[])
 
 		case 3: 
 			if(strcmp(argv[1], "r") == 0) {
-					//printf("read register\n");
 					uint8_t read_val = 0;
 					read_val = ov7670_tash_read_reg(argv[2]);
 					printf("READ\tADDRESS : %s\tVALUE : 0x%X\n",argv[2],read_val);		
 			} 
+			else if (strcmp(argv[1], "start") == 0){
+
+							init_ov7670_communication();
+			#ifdef PRINT
+							printf("\nConfiguring for QQVGA resolution\n\n");
+			#endif
+							ov7670_setRegisters(ov7670_reset,(sizeof(ov7670_reset)/sizeof(t_codec_init_script_entry)));
+			#ifdef PRINT
+							printf("\nCamera registers being reset\n\n");
+			#endif
+			#ifdef QQVGA
+							ov7670_setRegisters(ov7670_QQVGA_320,(sizeof(ov7670_QQVGA_320)/sizeof(t_codec_init_script_entry)));
+			#ifdef PRINT
+							printf("\n..... QVGA_640_240 (320 x 240) resolution configured .....\n\n");
+			#endif
+			#endif
+			
+			#ifdef QVGA
+							ov7670_setRegisters(ov7670_QVGA_640_240,(sizeof(ov7670_QVGA_640_240)/sizeof(t_codec_init_script_entry)));
+			#ifdef PRINT
+							printf("\n..... QQVGA_320 (160 x 120) resolution configured .....\n\n");
+			#endif
+			#endif
+
+			
+							ov7670_setRegisters(ov7670_color,(sizeof(ov7670_color)/sizeof(t_codec_init_script_entry)));
+			#ifdef PRINT
+							printf("\n..... Color registers configured .....\n\n");
+			#endif
+							ov7670_setRegisters(ov7670_pclk_rate,(sizeof(ov7670_pclk_rate)/sizeof(t_codec_init_script_entry)));
+			#ifdef PRINT
+							printf("\n..... Pixel Clock Rate configured .....\n\n");
+
+							printf("\n\n\nov7670 initialized\n\n");
+			#endif	
+							ov7670_tash_modify_reg("0x9f","0xcf");
+							ov7670_tash_modify_reg("0xa0","0xaf");	
+							mqtt_in(argv[2]);	
+			}
 			else if (strcmp(argv[1], "line") == 0){
 				uint16_t p  = 0;
 				p = (uint16_t)(atoi(argv[2])) - 1;
@@ -1087,15 +912,6 @@ int ov7670_test_main(int argc, char *argv[])
 			}
 			else if(strcmp(argv[1], "pxl") == 0){
 				print_lines(argv[2],argv[3]);
-			}
-			else if(strcmp(argv[1], "pyl") == 0){
-				uint16_t p,q;
-				p = (uint16_t)(atoi(argv[2])) - 1;
-				q = (uint16_t)(atoi(argv[3])) - 1;
-
-				if(p<=q){
-					print_y_lines(p,q);
-				}
 			}
 			else{printf("ERROR: Invalid write command\n");}
 		break;

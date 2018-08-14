@@ -161,37 +161,26 @@ typedef enum {
 #define VS_BIT					(GPA0_DAT & 0x2)
 #define PCLK_BIT				(GPA0_DAT & 0x1)
 
-#define H_RES					(320)
-#define V_RES					(120)
-#define MAX_FRAMES				(1)
+// #define QQVGA
+#define QVGA
 
-#define PIXELS_PER_LINE				(320)
+#ifdef QVGA
+	#define H_RES					(320*2)  //QVGA 
+	#define V_RES					(120*2)
+	#define MAX_FRAMES				(1)
+	#define BYTES_PER_LINE				(640) 	 //QVGA
+	#define LINES					(240)    //QVGA
+#endif
 
+#ifdef QQVGA
+	#define H_RES					(320)  //QVGA 
+	#define V_RES					(120)
+	#define MAX_FRAMES				(1)
+	#define BYTES_PER_LINE				(320) 	 //QVGA
+	#define LINES					(120)    //QVGA
+#endif
 
-//volatile uint8_t yuv_data[MAX_FRAMES][V_RES][H_RES];
-//volatile unsigned int yuv_line[H_RES];
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////// State Machine ///////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-
-///////////////////////////////// Macros //////////////////////////////////////
-
-// change after finalizing state machine implementation
-
-#define STATES					(3)
-#define EVENTS					(4)
-
-///////////////////////////// Enumerations ////////////////////////////////////
-
-
-
-/////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////
-
-
-
+#define PRINT					(23)
 
 //=====================================================
 // Device register map
@@ -451,6 +440,25 @@ t_codec_init_script_entry ov7670_QQVGA_320[] = {
 
 };
 
+t_codec_init_script_entry ov7670_QVGA_640_240[] = {
+
+    { REG_COM10, COM10_VS_POS, 0 },
+    { REG_COM3, 0x04, 0},  				// DCW Enable 
+    { REG_COM14, 0x19, 0},				// COM14[3] - Manual DCW adjustment (manual scaling enabled)
+    { REG_SCALING_XSC, 0x3A, 0},
+    { REG_SCALING_YSC, 0x35, 0},
+    { REG_SCALING_DCWCTR, 0x11, 50},			// Horizontal and Vertical Downsampling by factor of 2	
+    { REG_SCALING_PCLK_DIV, 0xf1, 50},			// Pclk divider bypassed, divider still set to 2, first 4 bits reserved still being set	
+    { REG_HSTART,0x16, 0},
+    { REG_HSTOP,0x04, 0},
+    { REG_HREF,0xa4, 0},
+    { REG_VSTART,0x02, 0},
+    { REG_VSTOP,0x7a, 0},
+    { REG_VREF,0x0a, 0},
+    { REG_TSLB, 0xC2, 0}
+
+};
+
 t_codec_init_script_entry ov7670_color[] = {
 
     ////////////////////// AEC and AGC Registers ////////////////////////////////
@@ -699,206 +707,6 @@ t_codec_init_script_entry ov7670_QQVGA_TEST[] = {
     { 0x9e, 0x3f, 0 },
 
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-t_codec_init_script_entry ov7670_QQVGA_TEST_2[] = {
-
-////////////////////////////////////////////////////////////
-	
-    { REG_COM7, 0x80, 0},
-
-////////////////////////////////////////////////////////////
-
-    { REG_COM3, 0, 0},
-    { REG_COM14, 0, 0},
-    
-    // Mystery scaling numbers
-    { 0x70, 0x3a, 0 },
-    { 0x71, 0x35, 0 },
-    { 0x72, 0x11, 100 },
-    { 0x73, 0xf0, 50 },
-    { 0xa2, 1 , 0 }, // 0x02 changed to 1
-    { REG_COM10, COM10_VS_POS, 0 },
-
-    // Gamma curve values
-    { 0x7a, 0x20, 0 },{ 0x7b, 0x10, 0 },
-    { 0x7c, 0x1e, 0 },{ 0x7d, 0x35, 0 },
-    { 0x7e, 0x5a, 0 },{ 0x7f, 0x69, 0 },
-    { 0x80, 0x76, 0 },{ 0x81, 0x80, 0 },
-    { 0x82, 0x88, 0 },{ 0x83, 0x8f, 0 },
-    { 0x84, 0x96, 0 },{ 0x85, 0xa3, 0 },
-    { 0x86, 0xaf, 0 },{ 0x87, 0xc4, 0 },
-    { 0x88, 0xd7, 0 },{ 0x89, 0xe8, 0 },
-
-    // AGC and AEC parameters.  Note we start by disabling those features,
-    // then turn them only after tweaking the values.
-    { REG_COM8, COM8_FASTAEC | COM8_AECSTEP, 0 },
-    { REG_GAIN, 0, 0 },
-    { REG_AECH, 0, 0 },
-    { REG_COM4, 0x40, 0 }, // magic reserved bit
-    { REG_COM9, 0x18, 0 }, // 4x gain + magic rsvd bit
-    { REG_BD50MAX, 0x05, 0 },
-    { REG_BD60MAX, 0x07, 0 },
-    { REG_AEW, 0x95, 0 },
-    { REG_AEB, 0x33, 0 },
-    { REG_VPT, 0xe3, 0 },
-    { REG_HAECC1, 0x78, 0 },
-    { REG_HAECC2, 0x68, 0 },
-    { 0xa1, 0x03, 0 }, // magic
-    { REG_HAECC3, 0xd8, 0 },
-    { REG_HAECC4, 0xd8, 0 },
-    { REG_HAECC5, 0xf0, 0 },
-    { REG_HAECC6, 0x90, 0 },
-    { REG_HAECC7, 0x94, 0 },
-    { REG_COM8, COM8_FASTAEC | COM8_AECSTEP | COM8_AGC | COM8_AEC, 0 },
-    { 0x30,0, 0 }, //disable some delays
-    { 0x31,0, 0 },//disable some delays
-    
-    // Almost all of these are magic "reserved" values. 
-    { REG_COM5, 0x61, 0 },
-    { REG_COM6, 0x4b, 0 },
-    { 0x16, 0x02, 0 },
-    { REG_MVFP, 0x07, 0 },
-    { 0x21, 0x02, 0 },
-    { 0x22, 0x91, 0 },
-    { 0x29, 0x07, 0 },
-    { 0x33, 0x0b, 0 },
-    { 0x35, 0x0b, 0 },
-    { 0x37, 0x1d, 0 },
-    { 0x38, 0x71, 0 },
-    { 0x39, 0x2a, 0 },
-    { REG_COM12, 0x78, 0 },
-    { 0x4d, 0x40, 0 },
-    { 0x4e, 0x20, 0 },
-    { REG_GFIX, 0, 0 },
-    //{0x6b, 0x4a, 0 },
-    { 0x74,0x10, 0 },
-    { 0x8d, 0x4f, 0 },
-    { 0x8e, 0, 0 },
-    { 0x8f, 0, 0 },
-    { 0x90, 0, 0 },
-    { 0x91, 0, 0 },
-    { 0x96, 0, 0 },
-    { 0x9a, 0, 0 },
-    { 0xb0, 0x84, 0 },
-    { 0xb1, 0x0c, 0 },
-    { 0xb2, 0x0e, 100 },
-    { 0xb3, 0x82, 0 },
-    { 0xb8, 0x0a, 0 },
-
-    // More reserved magic, some of which tweaks white balance
-    { 0x43, 0x0a, 0 },
-    { 0x44, 0xf0, 0 },
-    { 0x45, 0x34, 0 },
-    { 0x46, 0x58, 0 },
-    { 0x47, 0x28, 0 },
-    { 0x48, 0x3a, 0 },
-    { 0x59, 0x88, 0 },
-    { 0x5a, 0x88, 0 },
-    { 0x5b, 0x44, 0 },
-    { 0x5c, 0x67, 0 },
-    { 0x5d, 0x49, 0 },
-    { 0x5e, 0x0e, 0 },
-    { 0x6c, 0x0a, 0 },
-    { 0x6d, 0x55, 0 },
-    { 0x6e, 0x11, 0 },
-    { 0x6f, 0x9e, 0 }, // it was 0x9F "9e for advance AWB"
-    { 0x6a, 0x40, 0 },
-    { REG_BLUE, 0x40, 0 },
-    { REG_RED, 0x60, 0 },
-    { REG_COM8, COM8_FASTAEC | COM8_AECSTEP | COM8_AGC | COM8_AEC | COM8_AWB, 0 },
-
-    // Matrix coefficients
-    { 0x4f, 0x80, 0 },
-    { 0x50, 0x80, 0 },
-    { 0x51, 0, 0 },
-    { 0x52, 0x22, 0 },
-
-    { 0x53, 0x5e, 0 },
-    { 0x54, 0x80, 0 },
-    { 0x58, 0x9e, 0 },
-
-    { REG_COM16, COM16_AWBGAIN, 0 }, // Edge enhancement, denoise
-    { REG_EDGE, 0, 0 },
-    { 0x75, 0x05, 0 },
-    { REG_REG76, 0xe1, 0 }, // Pix correction, magic rsvd
-    { 0x4c, 0, 0 },
-    { 0x77, 0x01, 0 },
-    { REG_COM13, 0x08, 0 }, // No gamma, magic rsvd bit
-    { 0x4b, 0x09, 0 },
-    { 0xc9, 0x60, 0 },		//{REG_COM16, 0x38, 0 },
-    { 0x56, 0x40, 0 },
-    { 0x34, 0x11, 0 },
-    { REG_COM11, COM11_EXP | COM11_HZAUTO, 0 },
-    { 0xa4, 0x82, 0 }, //Was 0x88
-    { 0x96, 0, 0 },
-    { 0x97, 0x30, 0 },
-    { 0x98, 0x20, 0 },
-    { 0x99, 0x30, 0 },
-    { 0x9a, 0x84, 0 },
-    { 0x9b, 0x29, 0 },
-    { 0x9c, 0x03, 0 },
-    { 0x9d, 0x4c, 0 },
-    { 0x9e, 0x3f, 0 },
-    { 0x78, 0x04, 0 },
-
-    // Extra-weird stuff.  Some sort of multiplexor register
-    { 0x79, 0x01, 0 },{ 0xc8, 0xf0, 0 },
-    { 0x79, 0x0f, 0 },{ 0xc8, 0x00, 0 },
-    { 0x79, 0x10, 0 },{ 0xc8, 0x7e, 0 },
-    { 0x79, 0x0a, 0 },{ 0xc8, 0x80, 0 },
-    { 0x79, 0x0b, 0 },{ 0xc8, 0x01, 0 },
-    { 0x79, 0x0c, 0 },{ 0xc8, 0x0f, 0 },
-    { 0x79, 0x0d, 0 },{ 0xc8, 0x20, 0 },
-    { 0x79, 0x09, 0 },{ 0xc8, 0x80, 0 },
-    { 0x79, 0x02, 0 },{ 0xc8, 0xc0, 0 },
-    { 0x79, 0x03, 0 },{ 0xc8, 0x40, 0 },
-    { 0x79, 0x05, 0 },{ 0xc8, 0x30, 0 },
-    { 0x79, 0x26, 0 },
-
-////////////////////////////////////////////////////////////
-
-    { REG_COM3, 0x04, 0},  	
-    { REG_COM14, 0x1a, 0},	
-    { 0x70, 0x3A, 0},
-    { 0x71, 0x35, 0},
-    { 0x72, 0x22, 50},		
-    { 0x73, 0xf2, 50},		
-    { 0xa2, 0x02, 0},
-    { 0x3A, 0xC2, 0},
-
-////////////////////////////////////////////////////////////
-
-    { REG_HSTART,0x16, 0},
-    { REG_HSTOP,0x04, 0},
-    { REG_HREF,0xa4, 0},
-    { REG_VSTART,0x02, 0},
-    { REG_VSTOP,0x7a, 0},
-    { REG_VREF,0x0a, 0},
-    {0x11, 0x0c, 0}
-
-////////////////////////////////////////////////////////////
-
-};
-
 
 
 #endif
