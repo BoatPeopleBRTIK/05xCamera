@@ -49,12 +49,13 @@
 #define OV7670_I2C_FREQ 100000 //changed to 400000
 #define OV7670_I2C_ADDRLEN 7
 #if !defined DEBUG_USING_MPU9250
-#define OV7670_I2C_ADDRESS 0X21
+#define OV7670_I2C_WRITE_ADDRESS 		0x21	
+#define OV7670_I2C_READ_ADDRESS			0x21
 #else
-#define OV7670_I2C_ADDRESS 0x68  // debug I2C comm using MPU9250
+#define OV7670_I2C_ADDRESS 0x68  // debug I2C comm using MPU9250, earlier 0x21
 #endif 
 
-#define RETRY_TIMES 3
+#define RETRY_TIMES 5
 
 //=====================================================
 // Image format
@@ -161,7 +162,7 @@ typedef enum {
 #define VS_BIT					(GPA0_DAT & 0x2)
 #define PCLK_BIT				(GPA0_DAT & 0x1)
 
-// #define QQVGA
+//#define QQVGA
 #define QVGA
 
 #ifdef QVGA
@@ -180,7 +181,12 @@ typedef enum {
 	#define LINES					(120)    //QVGA
 #endif
 
-#define PRINT					(23)
+/** Enable /disable these print macros to obtain different print levels on the serial terminal output console ****/
+
+//#define PRINT					(23)
+//#define PRINT_INIT				(24)
+
+/*****************************************************************************************************************/
 
 //=====================================================
 // Device register map
@@ -416,10 +422,17 @@ t_codec_init_script_entry ov7670_reset[] = {
 };
 
 t_codec_init_script_entry ov7670_pclk_rate[] = {
-
+#ifdef QQVGA
     { REG_CLKRC, 0x0c, 0}
+#endif
+
+#ifdef QVGA
+    { REG_CLKRC, 0x18, 0}
+#endif
 
 };
+
+///////////////////////////////// QQVGA (320 X 120) Resolution Settings ///////////////////////////////////////
 
 t_codec_init_script_entry ov7670_QQVGA_320[] = {
 
@@ -440,6 +453,8 @@ t_codec_init_script_entry ov7670_QQVGA_320[] = {
 
 };
 
+///////////////////////////////// QVGA (640 X 240) Resolution Settings ///////////////////////////////////////
+
 t_codec_init_script_entry ov7670_QVGA_640_240[] = {
 
     { REG_COM10, COM10_VS_POS, 0 },
@@ -458,6 +473,8 @@ t_codec_init_script_entry ov7670_QVGA_640_240[] = {
     { REG_TSLB, 0xC2, 0}
 
 };
+
+////////////////////// Color, Exposure, White Balance and Gain Adjustments ///////////////////////////////////////
 
 t_codec_init_script_entry ov7670_color[] = {
 
@@ -555,22 +572,31 @@ t_codec_init_script_entry ov7670_color[] = {
 
     //////////////////////////////////////////////////////////////////////
 
-    { REG_COM16, COM16_AWBGAIN, 0 }, // Edge enhancement, denoise
+    { REG_COM16, COM16_AWBGAIN, 0 }, 		// Edge enhancement, denoise
     { REG_EDGE, 0, 0 },
     { 0x75, 0x05, 0 },
-    { REG_REG76, 0xe1, 0 }, // Pix correction, 
+    { REG_REG76, 0xe1, 0 }, 			// Pix correction, 
     { 0x77, 0x01, 0 },
-    { REG_COM13, 0x08, 0 }, // No gamma,
+    { REG_COM13, 0x08, 0 }, 			// No gamma,
     { 0x4b, 0x09, 0 },
-    { 0xc9, 0x60, 0 },		//{REG_COM16, 0x38, 0 },
+    { 0xc9, 0x60, 0 },				//{REG_COM16, 0x38, 0 },
     { REG_COM11, COM11_EXP | COM11_HZAUTO, 0 },
-    { 0xa4, 0x82, 0 }, //Was 0x88
+    { 0xa4, 0x82, 0 }, 				//Was 0x88
     { 0x9d, 0x4c, 0 },
     { 0x9e, 0x3f, 0 },
 
     //////////////////////////////////////////////////////////////////////
 
 };
+
+/////////////////////// Luminance reference settings ////////////////////////////////////
+
+t_codec_init_script_entry ov7670_luminance_ref[] = {
+    { 0x9f, 0xcf, 0},
+    { 0xa0, 0xaf, 0},
+};
+
+
 
 t_codec_init_script_entry ov7670_QQVGA_TEST[] = {
 
