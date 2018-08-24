@@ -24,11 +24,16 @@ int main(int argc, char** argv){
 	int i;
 	char temp;
 	char* frame_raw = new char[(WIDTH * 2) * HEIGHT];
-	for(i=0;i < WIDTH*HEIGHT;i++){
+	
+	for(i=0;i < (WIDTH*HEIGHT/2);i++){
 		yuv_file.get(temp); 
-		frame_raw[2*i] = temp;
+		frame_raw[4*i] = temp;
 		yuv_file.get(temp); 
-		frame_raw[2*i + 1] = 255 - temp;
+		frame_raw[4*i + 3] = temp;
+		yuv_file.get(temp); 
+		frame_raw[4*i + 2] = temp;
+		yuv_file.get(temp); 
+		frame_raw[4*i + 1] = temp;
 	}	
 	yuv_file.close();
 #endif
